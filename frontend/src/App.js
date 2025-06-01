@@ -4,6 +4,8 @@ import GlobalDashboard from './pages/GlobalDashboard';
 import SleepSummary from './pages/SleepSummary';
 import RunningSummary from './pages/RunningSummary';
 import HealthSummary from './pages/HealthSummary';
+import 'leaflet/dist/leaflet.css';
+
 
 function App() {
   return (

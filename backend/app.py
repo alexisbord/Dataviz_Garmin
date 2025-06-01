@@ -39,6 +39,32 @@ def get_last_run():
         for row in records
     ]
     return jsonify(result)
+# 11589864463
+@app.route('/api/records-by-id=<int:activity_id>')
+def get_records_by_id(activity_id):
+    conn = sqlite3.connect(DB_PATH_ACTIVITIES)
+    cur = conn.cursor()
+    cur.execute("SELECT record, position_lat, position_long, distance, hr, speed  FROM activity_records WHERE activity_id = ?", (activity_id,))
+    records = cur.fetchall()
+    cur.execute("SELECT activity_id, start_time, stop_time, distance, avg_speed FROM activities WHERE activity_id = ?", (activity_id,))
+    activity_data = cur.fetchone()
+    conn.close()
+    
+    result = [
+        {'record': row[0], 'lat': row[1], 'long': row[2], 'distance': row[3], 'hr': row[4], 'speed': row[5]}
+        for row in records
+    ]
+
+    result_activity = {
+        'activity_id': activity_data[0],
+        'start_time': activity_data[1],
+        'stop_time': activity_data[2],
+        'distance': activity_data[3],
+        'avg_speed': activity_data[4],
+        'records': result
+    }
+
+    return jsonify(result_activity)
 
 @app.route('/api/last-run-data')
 def get_last_run_data():
