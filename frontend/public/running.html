@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Running Summary</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background: #f8f9fd;
+      display: flex;
+    }
+
+    aside {
+      width: 60px;
+      background: #fff;
+      padding: 10px 0;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      margin-top: 20px;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      pointer-events: none;
+      font-size: 13px;
+      color: #222;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <div><a href="index.html"><span>🏠</span></a></div>
+    <div><a href="#"><span>❤️‍🔥</span></a></div>
+    <div><a href="running.html"><span>👣</span></a></div>
+    <div><a href="#"><span>🛏️</span></a></div>
+  </aside>
+
+  <main style="padding: 20px; flex: 1">
+    <h2>Cumulative Distance Over Time</h2>
+    <svg id="cumulative-chart" width="800" height="400"></svg>
+    <h2 style="margin-top:40px;">Running Beeswarm & Map</h2>
+    <div style="display: flex; gap: 40px; align-items: flex-start">
+      <svg id="beeswarm" width="800" height="500"></svg>
+      <div>
+        <div id="activity-info" style="margin-bottom: 12px; font-size: 14px; color: #111"></div>
+        <div id="map" style="height: 400px; width: 500px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const tooltip = d3.select("#tooltip");
+    const map = L.map('map').setView([48.8566, 2.3522], 15);
+    let pathLayer = null;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    fetch('http://localhost:5000/api/running-data')
+      .then(res => res.json())
+      .then(data => {
+        drawCumulativeChart(data);
+        drawBeeswarm(data);
+      });
+
+    function drawCumulativeChart(data) {
+      const svg = d3.select("#cumulative-chart");
+      const width = 800, height = 400;
+      const margin = { top: 20, right: 30, bottom: 40, left: 60 };
+
+      const parsed = data.map(d => ({
+        date: new Date(d.start_time),
+        distance: +d.distance
+      }));
+
+      parsed.sort((a, b) => a.date - b.date);
+
+      let cumulative = 0;
+      const cumulated = parsed.map(d => {
+        cumulative += d.distance;
+        return { date: d.date, cumulativeDistance: cumulative };
+      });
+
+      const x = d3.scaleTime()
+        .domain(d3.extent(cumulated, d => d.date))
+        .range([margin.left, width - margin.right]);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(cumulated, d => d.cumulativeDistance)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+      const line = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.cumulativeDistance));
+
+      svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).ticks(6));
+
+      svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y));
+
+      svg.append("path")
+        .datum(cumulated)
+        .attr("fill", "none")
+        .attr("stroke", "#2563eb")
+        .attr("stroke-width", 2)
+        .attr("d", line);
+    }
+
+    function drawBeeswarm(data) {
+      const svg = d3.select("#beeswarm");
+      const width = 800, height = 500;
+      const margin = { top: 100, right: 30, bottom: 40, left: 60 };
+
+      data.forEach(d => {
+        d.avg_speed = +d.avg_speed;
+        d.distance = +d.distance;
+        d.year = new Date(d.start_time).getFullYear();
+      });
+
+      const r = d3.scaleLinear().domain(d3.extent(data, d => d.distance)).range([3, 10]);
+      const y = d3.scalePoint().domain([...new Set(data.map(d => d.year))]).range([margin.top, height - margin.bottom]);
+      const x = d3.scaleLinear().domain(d3.extent(data, d => d.avg_speed)).range([margin.left, width - margin.right]);
+
+      const simulation = d3.forceSimulation(data)
+        .force("x", d3.forceX(d => x(d.avg_speed)).strength(1))
+        .force("y", d3.forceY(d => y(d.year)).strength(1))
+        .force("collide", d3.forceCollide(d => r(d.distance)))
+        .stop();
+
+      for (let i = 0; i < 200; i++) simulation.tick();
+
+      svg.selectAll("circle")
+        .data(data)
+        .join("circle")
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y)
+        .attr("r", d => r(d.distance))
+        .attr("fill", "#2563eb")
+        .on("mouseover", function (event, d) {
+          const total = 60 / d.avg_speed;
+          const min = Math.floor(total);
+          const sec = Math.round((total - min) * 60);
+          const pace = `${min}:${sec.toString().padStart(2, '0')}`;
+          tooltip
+            .style("display", "block")
+            .html(`<strong>Distance:</strong> ${d.distance.toFixed(2)} km<br/><strong>Pace:</strong> ${pace} min/km`)
+            .style("left", `${event.pageX + 15}px`)
+            .style("top", `${event.pageY - 28}px`);
+          d3.select(this).attr("fill", "#22d4fb");
+        })
+        .on("mouseout", function () {
+          tooltip.style("display", "none");
+          d3.select(this).attr("fill", "#2563eb");
+        })
+        .on("click", function (event, d) {
+          fetch(`http://localhost:5000/api/records-by-id=${d.activity_id}`)
+            .then(res => res.json())
+            .then(json => {
+              const coords = json.records.filter(p => p.lat && p.long).map(p => [p.lat, p.long]);
+              if (pathLayer) map.removeLayer(pathLayer);
+              pathLayer = L.polyline(coords, { color: '#2563eb' }).addTo(map);
+              map.fitBounds(pathLayer.getBounds());
+
+              const info = document.getElementById('activity-info');
+              const date = new Date(json.start_time);
+              const pace = (() => {
+                const total = 60 / json.avg_speed;
+                const min = Math.floor(total);
+                const sec = Math.round((total - min) * 60);
+                return `${min}:${sec.toString().padStart(2, '0')}`;
+              })();
+              info.innerHTML = `<strong>Distance:</strong> ${json.distance.toFixed(2)} km |
+                                <strong>Pace:</strong> ${pace} min/km |
+                                <strong>Date:</strong> ${date.toLocaleDateString()}`;
+            });
+        });
+    }
+  </script>
+</body>
+</html>

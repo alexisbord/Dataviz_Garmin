@@ -39,6 +39,7 @@ def get_last_run():
         for row in records
     ]
     return jsonify(result)
+
 # 11589864463
 @app.route('/api/records-by-id=<int:activity_id>')
 def get_records_by_id(activity_id):
