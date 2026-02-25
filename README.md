@@ -2,13 +2,13 @@
 
 This repository is a **personal data visualization tool** built around Garmin health/activity exports. It consists of a lightweight Flask backend that serves data from local Garmin SQLite databases and a React-based frontend to display running paths, sleep summaries, and other health metrics.
 
-## 🚀 Project Overview
+## Project Overview
 
 - **Backend** (`backend/`): Python/Flask service exposing REST endpoints pulling from SQLite databases located in `Data/DBs`.
 - **Frontend** (`frontend/`): React application (created with Vite) that fetches from the Flask API and renders dashboards using D3 and simple HTML/CSS.
 - **Data**: Garmin export databases such as `garmin_activities.db` and `garmin.db` contain activities, records, sleep, and other metrics. These are expected under `Data/DBs`.
 
-## 📁 Directory Structure
+## Directory Structure
 
 ```
 Dataviz_Garmin/
@@ -22,7 +22,7 @@ Dataviz_Garmin/
 └── README.md           # <-- you are here
 ```
 
-## 🗄️ Data Sources
+## Data Sources
 
 The backend connects to two SQLite databases defined with absolute paths in `app.py`:
 
@@ -31,7 +31,7 @@ The backend connects to two SQLite databases defined with absolute paths in `app
 
 These files are normally created by exporting your Garmin Connect data or via the companion `garmindb` project (see `backend/make.py` for invocation).
 
-## 🛠️ Setup & Usage
+## Setup & Usage
 
 1. **Python environment**: ensure you have a virtualenv or conda env with dependencies installed. Activate the workspace environment (e.g. `& .venv\Scripts\Activate.ps1`).
 
@@ -60,7 +60,7 @@ These files are normally created by exporting your Garmin Connect data or via th
    python make.py all    # or other make targets
    ```
 
-## 🔗 API Endpoints
+## API Endpoints
 
 | Route                         | Description                                  |
 |------------------------------|----------------------------------------------|
@@ -70,7 +70,7 @@ These files are normally created by exporting your Garmin Connect data or via th
 | `/api/last-run-data`         | Summary of the most recent run               |
 | `/api/last-week-sleep`       | Sleep entries for the past 7 days            |
 
-## 📝 Notes & Tips
+## Notes & Tips
 
 - Latitude/longitude values are stored as Garmin "semicircles"; the frontend converts them using `lat * (180 / 2**31)`.
 - Speeds, distances, and times are normalized in the backend before being sent to the client.
