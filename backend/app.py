@@ -6,8 +6,16 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-DB_PATH_ACTIVITIES = os.path.abspath(r'C:\Users\alexi\OneDrive\Documents\5_Course\HealthData\Data\DBs\garmin_activities.db')
-DB_PATH_GARMIN = os.path.abspath(r'C:\Users\alexi\OneDrive\Documents\5_Course\HealthData\Data\DBs\garmin.db')
+# Configure DB paths via environment variables to avoid hard-coding absolute paths.
+# Supported env vars:
+# - GARMIN_DB_DIR -> directory containing DB files (overrides defaults)
+# - GARMIN_ACTIVITIES_DB -> full path to garmin_activities.db
+# - GARMIN_DB -> full path to garmin.db
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+DEFAULT_DB_DIR = os.environ.get('GARMIN_DB_DIR') or os.path.join(BASE_DIR, 'Data', 'DBs')
+
+DB_PATH_ACTIVITIES = os.environ.get('GARMIN_ACTIVITIES_DB') or os.path.join(DEFAULT_DB_DIR, 'garmin_activities.db')
+DB_PATH_GARMIN = os.environ.get('GARMIN_DB') or os.path.join(DEFAULT_DB_DIR, 'garmin.db')
 
 @app.route('/api/running-data')
 def get_running_distances():

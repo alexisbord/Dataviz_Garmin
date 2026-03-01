@@ -2,8 +2,13 @@ import os
 import subprocess
 import sys
 
-# Define the target directory (expand ~ to full path)
-target_dir = os.path.expanduser("~/onedrive/documents/5_course/healthdata/garmindb")
+# Configure target directory via environment variable to avoid hard-coding absolute paths.
+# Supported env vars:
+# - GARMINDB_TARGET_DIR -> directory containing GarminDB (overrides defaults)
+# Fallback: relative path to GarminDB from current directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_TARGET = os.path.join(BASE_DIR, '..', '..', 'GarminDB')
+target_dir = os.environ.get('GARMINDB_TARGET_DIR') or os.path.abspath(DEFAULT_TARGET)
 
 # Check if the directory exists
 if not os.path.isdir(target_dir):
