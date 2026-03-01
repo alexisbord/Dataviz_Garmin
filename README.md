@@ -56,9 +56,8 @@ The backend handles data extraction and transformation, while the frontend focus
 
 ## Project Structure
 
-Dataviz_Garmin/  
-│  
-├── Data/DBs/               # Garmin SQLite exports  
+Data/DBs/                   # Garmin SQLite exports  
+Dataviz_Garmin/
 │  
 ├── backend/                # Flask API  
 │   ├── app.py              # REST endpoints  
