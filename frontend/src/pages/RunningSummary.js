@@ -7,186 +7,161 @@ import 'leaflet/dist/leaflet.css';
 
 function CumulativeDistance() {
   const [distances, setDistances] = useState([]);
+  const [view, setView] = useState("overall");
   const svgRef = useRef();
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/running-data')
+    fetch("http://localhost:5000/api/running-data")
       .then(res => res.json())
       .then(data => setDistances(data));
   }, []);
 
   useEffect(() => {
     if (distances.length === 0) return;
+
     const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
+    svg.selectAll("*").remove();
+
     const width = 800;
     const height = 400;
-    const margin = { top: 20, right: 30, bottom: 40, left: 60 };
-    const data = distances.map(d => ({
-      date: new Date(d.start_time),
-      cumulativeDistance: d3.sum(distances.filter(x => new Date(x.start_time) <= new Date(d.start_time)), x => x.distance)
-    }));
+    const margin = { top: 30, right: 40, bottom: 40, left: 60 };
 
-    
-    const x = d3.scaleTime()
-      .domain(d3.extent(data, d => d.date))
-      .range([margin.left, width - margin.right]);
-
-    // Use fixed start date: 18 July 2023
-    const startDate = new Date(2023, 6, 18); // Month is 0-based: 6 = July
-    const endDate = new Date(d3.max(data, d => d.date));
-    endDate.setDate(endDate.getDate() + 1);  // pad endDate to capture final tick
-
-    const tickValues = [];
-    let tick = new Date(startDate);
-
-    while (tick <= endDate) {
-      tickValues.push(new Date(tick));
-      tick.setMonth(tick.getMonth() + 3);
-    }
-
-    svg.append("g")
-      .attr("transform", `translate(0,${height - margin.bottom})`)
-      .call(d3.axisBottom(x)
-        .tickValues(tickValues)
-        .tickFormat(d3.timeFormat("%b %Y"))
-      );
-    
-    const y = d3.scaleLinear()
-      .domain([0, d3.max(data, d => d.cumulativeDistance)])
-      .nice()
-      .range([height - margin.bottom, margin.top]);
-
-    const maxDistance = d3.max(data, d => d.cumulativeDistance);
-    const yTicks = d3.range(0, maxDistance, 400);
-
-    svg.append("g")
-      .attr("transform", `translate(${margin.left},0)`)
-      .call(d3.axisLeft(y).tickValues(yTicks).tickFormat(d => `${d} km`));
-
-    svg.append("g")
-      .attr("class", "grid-lines")
-      .selectAll("line")
-      .data(yTicks.filter(d => d !== 0)) 
-      .join("line")
-      .attr("x1", margin.left)
-      .attr("x2", width - margin.right)
-      .attr("y1", d => y(d))
-      .attr("y2", d => y(d))
-      .attr("stroke", "#ccc")
-      .attr("stroke-dasharray", "2,2");
-  
-
-    const line = d3.line()
-      .x(d => x(d.date))
-      .y(d => y(d.cumulativeDistance));
     svg.attr("viewBox", [0, 0, width, height]);
 
-    // Transparent wide path for hover detection (place FIRST)
-    const hoverPath = svg.append("path")
-      .datum(data)
-      .attr("fill", "none")
-      .attr("stroke", "transparent")
-      .attr("stroke-width", 30)
-      .attr("d", line)
-      .style("cursor", "pointer")
-      .style("pointer-events", "all"); // Explicitly enable pointer events
+    const parsed = distances.map(d => ({
+      date: new Date(d.start_time),
+      distance: +d.distance
+    }));
 
-    // Visible line (place SECOND, on top)
-    svg.append("path")
-      .datum(data)
-      .attr("fill", "none")
-      .attr("stroke", "#2563eb")
-      .attr("stroke-width", 2)
-      .attr("d", line)
-      .style("pointer-events", "none"); // Disable pointer events so hover path works
+    // =========================
+    // OVERALL VIEW
+    // =========================
+    if (view === "overall") {
 
-    // Tooltip setup
-    let tooltip = d3.select("body").select(".line-tooltip");
-    if (tooltip.empty()) {
-      tooltip = d3.select("body")
-        .append("div")
-        .attr("class", "line-tooltip")
-        .style("position", "absolute")
-        .style("background", "#fff")
-        .style("border", "1px solid #ccc")
-        .style("border-radius", "8px")
-        .style("padding", "8px 12px")
-        .style("pointer-events", "none")
-        .style("font-size", "13px")
-        .style("color", "#222")
-        .style("box-shadow", "0 2px 8px rgba(0,0,0,0.1)")
-        .style("z-index", 1000)
-        .style("display", "none");
-    }
+      const sorted = parsed.sort((a,b) => a.date - b.date);
 
-    const focusCircle = svg.append("circle")
-      .attr("r", 4)
-      .attr("fill", "#2563eb")
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
-      .style("display", "none")
-      .style("pointer-events", "none"); // Prevent circle from interfering
-
-    hoverPath
-      .on("mousemove", function (event) {
-        const [mx] = d3.pointer(event);
-        const hoveredDate = x.invert(mx);
-        const bisectDate = d3.bisector(d => d.date).left;
-        let idx = bisectDate(data, hoveredDate);
-        
-        // Improved bisection logic to handle edge cases
-        if (idx === 0) {
-          // Before first data point
-          const d = data[0];
-          showTooltipAndCircle(d, event);
-        } else if (idx >= data.length) {
-          // After last data point
-          const d = data[data.length - 1];
-          showTooltipAndCircle(d, event);
-        } else {
-          // Between data points - find closest
-          const d0 = data[idx - 1];
-          const d1 = data[idx];
-          const d = (hoveredDate - d0.date > d1.date - hoveredDate) ? d1 : d0;
-          showTooltipAndCircle(d, event);
-        }
-      })
-      .on("mouseout", function () {
-        tooltip.style("display", "none");
-        focusCircle.style("display", "none");
+      let cumulative = 0;
+      sorted.forEach(d => {
+        cumulative += d.distance;
+        d.cumulative = cumulative;
       });
 
-    function showTooltipAndCircle(d, event) {
-      if (!d) return;
-      
-      const cx = x(d.date);
-      const cy = y(d.cumulativeDistance);
+      const x = d3.scaleTime()
+        .domain(d3.extent(sorted, d => d.date))
+        .range([margin.left, width - margin.right]);
 
-      focusCircle
-        .style("display", "block")
-        .attr("cx", cx)
-        .attr("cy", cy);
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(sorted, d => d.cumulative)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
 
-      tooltip
-        .style("display", "block")
-        .html(`<strong>Date:</strong> ${d.date.toLocaleDateString()}<br/>
-              <strong>Distance:</strong> ${d.cumulativeDistance.toFixed(1)} km`)
-        .style("left", (event.pageX + 15) + "px")
-        .style("top", (event.pageY - 28) + "px");
+      const line = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.cumulative));
+
+      svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).ticks(6));
+
+      svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y));
+
+      svg.append("path")
+        .datum(sorted)
+        .attr("fill", "none")
+        .attr("stroke", "#2563eb")
+        .attr("stroke-width", 2)
+        .attr("d", line)
+        .attr("opacity", 0)
+        .transition()
+        .duration(600)
+        .attr("opacity", 1);
     }
 
+    // =========================
+    // YEARLY VIEW
+    // =========================
+    if (view === "year") {
 
-  }, [distances]);
+      const grouped = d3.group(parsed, d => d.date.getFullYear());
+
+      const x = d3.scaleTime()
+        .domain([new Date(2000,0,1), new Date(2000,11,31)])
+        .range([margin.left, width - margin.right]);
+
+      let allCumulatives = [];
+
+      grouped.forEach(values => {
+        values.sort((a,b) => a.date - b.date);
+        let cumulative = 0;
+        values.forEach(d => {
+          cumulative += d.distance;
+          d.cumulative = cumulative;
+          d.fakeDate = new Date(2000, d.date.getMonth(), d.date.getDate());
+          allCumulatives.push(cumulative);
+        });
+      });
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(allCumulatives)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+      svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b")));
+
+      svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y));
+
+      const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+      grouped.forEach((values, year) => {
+
+        const line = d3.line()
+          .x(d => x(d.fakeDate))
+          .y(d => y(d.cumulative));
+
+        svg.append("path")
+          .datum(values)
+          .attr("fill", "none")
+          .attr("stroke", color(year))
+          .attr("stroke-width", 2)
+          .attr("d", line)
+          .attr("opacity", 0)
+          .transition()
+          .duration(600)
+          .attr("opacity", 1);
+      });
+    }
+
+  }, [distances, view]);
+
   return (
-    <div style={{ fontFamily: 'sans-serif', background: '#fff' }}>
-      <h2>Cumulative Distance Over Time</h2>
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h2>Cumulative Distance</h2>
+        <button
+          onClick={() => setView(view === "overall" ? "year" : "overall")}
+          style={{
+            padding: "6px 12px",
+            borderRadius: "8px",
+            border: "none",
+            background: "#2563eb",
+            color: "white",
+            cursor: "pointer"
+          }}
+        >
+          {view === "overall" ? "View by Year" : "View Overall"}
+        </button>
+      </div>
+
       <svg ref={svgRef} width={800} height={400}></svg>
-      {distances.length === 0 && <p>Loading data...</p>}
     </div>
   );
 }
-
 function AutoZoomPolyline({ path }) {
   const map = useMap();
 

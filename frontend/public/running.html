@@ -48,8 +48,21 @@
   </aside>
 
   <main style="padding: 20px; flex: 1">
-    <h2>Cumulative Distance Over Time</h2>
-    <svg id="cumulative-chart" width="800" height="400"></svg>
+    <div style="display:flex; align-items:center; justify-content:space-between; width:800px;">
+  <h2 style="margin:0;">Cumulative Distance Over Time</h2>
+  <button id="toggle-view"
+    style="
+      padding:6px 12px;
+      border-radius:8px;
+      border:none;
+      background:#2563eb;
+      color:white;
+      cursor:pointer;">
+    View by Year
+  </button>
+</div>
+
+<svg id="cumulative-chart" width="800" height="400"></svg>
     <h2 style="margin-top:40px;">Running Beeswarm & Map</h2>
     <div style="display: flex; gap: 40px; align-items: flex-start">
       <svg id="beeswarm" width="800" height="500"></svg>
@@ -81,51 +94,199 @@
       });
 
     function drawCumulativeChart(data) {
-      const svg = d3.select("#cumulative-chart");
-      const width = 800, height = 400;
-      const margin = { top: 20, right: 30, bottom: 40, left: 60 };
 
-      const parsed = data.map(d => ({
-        date: new Date(d.start_time),
-        distance: +d.distance
-      }));
+  const svg = d3.select("#cumulative-chart");
+  svg.selectAll("*").remove();
 
-      parsed.sort((a, b) => a.date - b.date);
+  const width = 800;
+  const height = 400;
+  const margin = { top: 30, right: 40, bottom: 40, left: 60 };
+
+  const parsed = data.map(d => ({
+    date: new Date(d.start_time),
+    distance: +d.distance
+  }));
+
+  const button = d3.select("#toggle-view");
+let view = "overall";
+
+button.on("click", () => {
+  view = view === "overall" ? "year" : "overall";
+  button.text(view === "overall" ? "View by Year" : "View Overall");
+  render();
+});
+
+  function render() {
+
+    svg.selectAll("*").remove();
+
+    if (view === "overall") {
+
+      const sorted = parsed.sort((a,b) => a.date - b.date);
 
       let cumulative = 0;
-      const cumulated = parsed.map(d => {
+      sorted.forEach(d => {
         cumulative += d.distance;
-        return { date: d.date, cumulativeDistance: cumulative };
+        d.cumulative = cumulative;
       });
 
       const x = d3.scaleTime()
-        .domain(d3.extent(cumulated, d => d.date))
+        .domain(d3.extent(sorted, d => d.date))
         .range([margin.left, width - margin.right]);
 
       const y = d3.scaleLinear()
-        .domain([0, d3.max(cumulated, d => d.cumulativeDistance)])
+        .domain([0, d3.max(sorted, d => d.cumulative)])
         .nice()
         .range([height - margin.bottom, margin.top]);
 
       const line = d3.line()
         .x(d => x(d.date))
-        .y(d => y(d.cumulativeDistance));
+        .y(d => y(d.cumulative));
 
       svg.append("g")
         .attr("transform", `translate(0,${height - margin.bottom})`)
-        .call(d3.axisBottom(x).ticks(6));
+        .call(d3.axisBottom(x));
 
       svg.append("g")
         .attr("transform", `translate(${margin.left},0)`)
         .call(d3.axisLeft(y));
 
       svg.append("path")
-        .datum(cumulated)
+        .datum(sorted)
         .attr("fill", "none")
         .attr("stroke", "#2563eb")
         .attr("stroke-width", 2)
-        .attr("d", line);
+        .attr("d", line)
+        .attr("opacity", 0)
+        .transition()
+        .duration(600)
+        .attr("opacity", 1);
     }
+
+    if (view === "year") {
+
+      const grouped = d3.group(parsed, d => d.date.getFullYear());
+
+      const x = d3.scaleTime()
+        .domain([new Date(2000,0,1), new Date(2000,11,31)])
+        .range([margin.left, width - margin.right]);
+
+      let allValues = [];
+
+      grouped.forEach(values => {
+        values.sort((a,b) => a.date - b.date);
+        let cumulative = 0;
+        values.forEach(d => {
+          cumulative += d.distance;
+          d.cumulative = cumulative;
+          d.fakeDate = new Date(2000, d.date.getMonth(), d.date.getDate());
+          allValues.push(cumulative);
+        });
+        // =========================
+// HOVER
+// =========================
+
+const overlay = svg.append("rect")
+  .attr("x", margin.left)
+  .attr("y", margin.top)
+  .attr("width", width - margin.left - margin.right)
+  .attr("height", height - margin.top - margin.bottom)
+  .attr("fill", "none")
+  .attr("pointer-events", "all");
+
+const verticalLine = svg.append("line")
+  .attr("stroke", "#999")
+  .attr("stroke-dasharray", "4")
+  .attr("y1", margin.top)
+  .attr("y2", height - margin.bottom)
+  .style("opacity", 0);
+
+const tooltip = d3.select("#tooltip");
+
+const groupedArray = Array.from(grouped.entries());
+
+overlay
+  .on("mousemove", function (event) {
+
+    const [mouseX] = d3.pointer(event);
+    const hoveredDate = x.invert(mouseX);
+
+    verticalLine
+      .attr("x1", mouseX)
+      .attr("x2", mouseX)
+      .style("opacity", 1);
+
+    let tooltipHTML = `<strong>Date:</strong> ${d3.timeFormat("%d %b")(hoveredDate)}<br/>`;
+
+    groupedArray.forEach(([year, values], i) => {
+
+      const bisect = d3.bisector(d => d.fakeDate).right;
+      const index = bisect(values, hoveredDate);
+
+      if (index === 0) return;
+
+      const value = values[index - 1];
+
+      if (!value) return;
+
+      tooltipHTML += `<strong>${year}:</strong> ${value.cumulative.toFixed(1)} km<br/>`;
+
+      svg.append("circle")
+        .attr("class", "hover-point")
+        .attr("cx", x(value.fakeDate))
+        .attr("cy", y(value.cumulative))
+        .attr("r", 5)
+        .attr("fill", d3.schemeCategory10[i]);
+    });
+
+    tooltip
+      .style("display", "block")
+      .html(tooltipHTML)
+      .style("left", `${event.pageX + 15}px`)
+      .style("top", `${event.pageY - 28}px`);
+  })
+  .on("mouseout", function () {
+    verticalLine.style("opacity", 0);
+    svg.selectAll(".hover-point").remove();
+    tooltip.style("display", "none");
+  });
+      });
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(allValues)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+      svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b")));
+
+      svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y));
+
+      const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+      grouped.forEach((values, year) => {
+
+        const line = d3.line()
+          .x(d => x(d.fakeDate))
+          .y(d => y(d.cumulative));
+
+        svg.append("path")
+          .datum(values)
+          .attr("fill", "none")
+          .attr("stroke", color(year))
+          .attr("stroke-width", 2)
+          .attr("d", line)
+          .attr("opacity", 0)
+          .transition()
+          .duration(600)
+          .attr("opacity", 1);
+      });
+    }
+  }
+}
 
     function drawBeeswarm(data) {
       const svg = d3.select("#beeswarm");
@@ -141,6 +302,17 @@
       const r = d3.scaleLinear().domain(d3.extent(data, d => d.distance)).range([3, 10]);
       const y = d3.scalePoint().domain([...new Set(data.map(d => d.year))]).range([margin.top, height - margin.bottom]);
       const x = d3.scaleLinear().domain(d3.extent(data, d => d.avg_speed)).range([margin.left, width - margin.right]);
+
+      svg.append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(
+        d3.axisLeft(y)
+          .tickSize(0)
+      )
+      .call(g => g.select(".domain").remove()) // enlève la ligne verticale
+      .selectAll("text")
+      .style("font-size", "14px")
+      .style("font-weight", "600");
 
       const simulation = d3.forceSimulation(data)
         .force("x", d3.forceX(d => x(d.avg_speed)).strength(1))

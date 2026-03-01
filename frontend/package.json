@@ -1,0 +1,25 @@
+{
+  "name": "garmin-d3-frontend",
+  "version": "1.0.0",
+  "description": "D3.js + React + TailwindCSS dashboard for Garmin data",
+  "scripts": {
+    "start": "parcel public/index.html --port 1234 --open",
+    "build": "parcel build public/index.html"
+  },
+  "dependencies": {
+    "d3": "^7.8.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-react": "^7.22.5",
+    "autoprefixer": "^10.4.21",
+    "parcel": "^2.10.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.7"
+  },
+  "browserslist": [
+    "last 1 Chrome version"
+  ]
+}
