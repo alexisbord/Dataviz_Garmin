@@ -86,7 +86,7 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    fetch('http://localhost:5000/api/running-data')
+    fetch('http://localhost:5000/api/running-activities')
       .then(res => res.json())
       .then(data => {
         drawCumulativeChart(data);
@@ -346,7 +346,7 @@ overlay
           d3.select(this).attr("fill", "#2563eb");
         })
         .on("click", function (event, d) {
-          fetch(`http://localhost:5000/api/records-by-id=${d.activity_id}`)
+          fetch(`http://localhost:5000/api/activities/${d.activity_id}/records`)
             .then(res => res.json())
             .then(json => {
               const coords = json.records.filter(p => p.lat && p.long).map(p => [p.lat, p.long]);

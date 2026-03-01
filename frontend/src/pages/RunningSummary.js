@@ -11,7 +11,7 @@ function CumulativeDistance() {
   const svgRef = useRef();
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/running-data")
+    fetch("http://localhost:5000/api/running-activities")
       .then(res => res.json())
       .then(data => setDistances(data));
   }, []);
@@ -206,7 +206,7 @@ function RunningBeeswarm({ setPath, setActivityInfo }) {
   const svgRef = useRef();
   
   useEffect(() => {
-    fetch('http://localhost:5000/api/running-data')
+    fetch('http://localhost:5000/api/running-activities')
       .then(res => res.json())
       .then(data => setDistances(data));
   }, []);
@@ -315,7 +315,7 @@ svg.selectAll("circle")
         // Update selected circle state
         setSelectedCircle(d.activity_id);
         
-        fetch(`http://localhost:5000/api/records-by-id=${d.activity_id}`)
+        fetch(`http://localhost:5000/api/activities/${d.activity_id}/records`)
           .then(res => res.json())
           .then(json => {
             const coordinates = (json.records || [])

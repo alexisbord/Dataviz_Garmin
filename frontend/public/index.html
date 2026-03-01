@@ -96,10 +96,13 @@
   </main>
 
   <script>
-    // Fetch and render run path
-    fetch('http://127.0.0.1:5000/api/last-run-records')
+    // Fetch latest activity and render run path
+    fetch('http://127.0.0.1:5000/api/activities/latest')
       .then(res => res.json())
-      .then(data => {
+      .then(activity => {
+        return fetch(`http://127.0.0.1:5000/api/activities/${activity.activity_id}/records`)
+          .then(res => res.json())
+          .then(data => {
         const cleaned = data.filter(d => d.lat && d.long).map(d => ({
           lat: d.lat * (180 / Math.pow(2, 31)),
           long: d.long * (180 / Math.pow(2, 31))
@@ -126,10 +129,11 @@
           .attr("stroke", "#3b82f6")
           .attr("stroke-width", 2)
           .attr("d", line);
+          });
       });
 
     // Running summary
-    fetch('http://127.0.0.1:5000/api/last-run-data')
+    fetch('http://127.0.0.1:5000/api/activities/latest')
       .then(res => res.json())
       .then(data => {
         const pace = data.avg_speed > 0 ? 60 / data.avg_speed : 0;
@@ -154,7 +158,7 @@
       });
 
     // Sleep data
-    fetch('http://127.0.0.1:5000/api/last-week-sleep')
+    fetch('http://127.0.0.1:5000/api/sleep/last-week')
       .then(res => res.json())
       .then(data => {
         if (!data || data.length === 0) {
