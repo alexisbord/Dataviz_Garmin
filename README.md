@@ -1,6 +1,6 @@
 # Dataviz_Garmin
 
-This repository is a **personal data visualization tool** built around Garmin health/activity exports. It consists of a lightweight Flask backend that serves data from local Garmin SQLite databases and a React-based frontend to display running paths, sleep summaries later, and other health metrics.
+This repository is a **personal data visualization tool** built around Garmin health/activity exports. It consists of a lightweight Flask backend that serves data from local Garmin SQLite databases and a frontend application to display running paths, sleep summaries, and other health metrics.
 
 ![alt text](<cumulative_dist.png>)
 ![alt text](<beeswarm.png>)
@@ -8,7 +8,7 @@ This repository is a **personal data visualization tool** built around Garmin he
 ## Project Overview
 
 - **Backend** (`backend/`): Python/Flask service exposing REST endpoints pulling from SQLite databases located in `Data/DBs`.
-- **Frontend** (`frontend/`): React application (created with Vite) that fetches from the Flask API and renders dashboards using D3 and simple HTML/CSS.
+- **Frontend** (`frontend/`): application (created with Vite) that fetches from the Flask API and renders dashboards using D3 and simple HTML/CSS.
 - **Data**: Garmin export databases (`garmin_activities.db`, `garmin.db`, etc.) hold activities, records, sleep, and other metrics. Place them in `Data/DBs` or point the backend at wherever you keep them. You can generate these files yourself or simply clone/run the upstream project `tcgoetz/GarminDB` which automates downloading and building the SQLite databases.
 
 
@@ -20,9 +20,9 @@ Dataviz_Garmin/
 ├── backend/            # Flask app & helper script
 │   ├── app.py          # API implementation
 │   └── make.py         # Convenience wrapper to run make in garminDB repo
-├── frontend/           # React/Vite client
+├── frontend/           # Vite client
 │   ├── public/         # static html templates
-│   └── src/            # React source (pages, styles, components)
+│   └── src/            # # Frontend source (visualizations, components, styles)
 ├── LICENSE
 └── README.md           # <-- you are here
 ```
@@ -79,7 +79,7 @@ Environment variables control the paths to database files and the GarminDB repos
    ```
    Open `http://localhost:3000` (or the port indicated) in your browser.
 
-   The React app assumes the backend is reachable at `http://127.0.0.1:5000` – adjust `fetch` URLs in the source if you change this.
+   The frontend assumes the backend is reachable at `http://127.0.0.1:5000`.
 
 4. **Database sync (optional)**:
    The `backend/make.py` script simply forwards `make` commands to your copy of the `garmindb` repository. Run it if you need to rebuild the SQLite exports:
