@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sleep Summary</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background: #f8f9fd;
+      display: flex;
+    }
+
+    aside {
+      width: 60px;
+      background: #fff;
+      padding: 10px 0;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      margin-top: 20px;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      pointer-events: none;
+      font-size: 13px;
+      color: #222;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      display: none;
+    }
+
+    .stat-box {
+      background: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      margin-bottom: 10px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #999;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2563eb;
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <div><a href="index.html"><span>🏠</span></a></div>
+    <div><a href="#"><span>❤️‍🔥</span></a></div>
+    <div><a href="running.html"><span>👣</span></a></div>
+    <div><a href="sleep.html"><span>🛏️</span></a></div>
+  </aside>
+
+  <main style="padding: 20px; flex: 1">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px;">
+      <h2 style="margin:0;">Sleep Analysis</h2>
+      <button id="toggle-view"
+        style="
+          padding:6px 12px;
+          border-radius:8px;
+          border:none;
+          background:#2563eb;
+          color:white;
+          cursor:pointer;">
+        View by Month
+      </button>
+    </div>
+
+    <div style="display: flex; gap: 20px;">
+      <!-- Left Column: Charts -->
+      <div style="flex: 1;">
+        <!-- Sleep Duration Trend -->
+        <div style="background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0;">Sleep Duration Trend</h3>
+          <svg id="sleep-trend-chart" width="100%" height="350"></svg>
+        </div>
+
+        <!-- Sleep Schedule Heatmap -->
+        <div style="background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0;">Sleep Schedule Heatmap (Last 7 Days)</h3>
+          <svg id="sleep-heatmap" width="100%" height="300"></svg>
+        </div>
+      </div>
+
+      <!-- Right Column: Stats -->
+      <div style="width: 300px;">
+        <div style="background: #fff; border-radius: 12px; padding: 20px;">
+          <h3 style="margin-top: 0; margin-bottom: 20px;">This Week</h3>
+          
+          <div class="stat-box">
+            <div class="stat-label">Avg Sleep Duration</div>
+            <div class="stat-value" id="avg-duration">--</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-label">Total Sleep</div>
+            <div class="stat-value" id="total-sleep">--</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-label">Best Night</div>
+            <div class="stat-value" id="best-night">--</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-label">Worst Night</div>
+            <div class="stat-value" id="worst-night">--</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-label">Average Bedtime</div>
+            <div style="font-size: 16px; font-weight: bold; color: #222;" id="avg-bedtime">--</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-label">Average Wake Time</div>
+            <div style="font-size: 16px; font-weight: bold; color: #222;" id="avg-waketime">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sleep Details Table -->
+    <div style="background: #fff; border-radius: 12px; padding: 20px; margin-top: 20px;">
+      <h3 style="margin-top: 0;">Recent Sleep Records</h3>
+      <div id="sleep-table" style="overflow-x: auto;"></div>
+    </div>
+  </main>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const tooltip = d3.select("#tooltip");
+    let sleepData = [];
+    let view = "overall";
+
+    // Fetch sleep data
+    fetch('http://localhost:5000/api/sleep/last-week')
+      .then(res => res.json())
+      .then(data => {
+        sleepData = data.sort((a, b) => new Date(a.start) - new Date(b.start));
+        updateStats();
+        drawSleepTrendChart();
+        drawHeatmap();
+        drawTable();
+      })
+      .catch(err => console.error("Error fetching sleep data:", err));
+
+    // Toggle view button
+    document.getElementById("toggle-view").addEventListener("click", function() {
+      view = view === "overall" ? "month" : "overall";
+      this.textContent = view === "overall" ? "View by Month" : "View Overall";
+      drawSleepTrendChart();
+    });
+
+    function updateStats() {
+      if (sleepData.length === 0) return;
+
+      // Get last 7 days of data
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const lastWeek = sleepData.filter(d => new Date(d.start) >= sevenDaysAgo);
+
+      if (lastWeek.length === 0) return;
+
+      // Parse sleep durations
+      const durations = lastWeek.map(d => {
+        const parts = d.total_sleep.split(':');
+        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      });
+
+      const avgMinutes = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+      const avgHours = Math.floor(avgMinutes / 60);
+      const avgMins = avgMinutes % 60;
+
+      document.getElementById("avg-duration").textContent = `${avgHours}h ${avgMins}m`;
+      document.getElementById("total-sleep").textContent = `${(durations.length * 7).toFixed(0)}h`;
+
+      // Best and worst night
+      const maxMinutes = Math.max(...durations);
+      const minMinutes = Math.min(...durations);
+      document.getElementById("best-night").textContent = `${Math.floor(maxMinutes / 60)}h ${maxMinutes % 60}m`;
+      document.getElementById("worst-night").textContent = `${Math.floor(minMinutes / 60)}h ${minMinutes % 60}m`;
+
+      // Average bedtime and wake time
+      const bedtimes = lastWeek.map(d => new Date(d.start));
+      const waketimes = lastWeek.map(d => new Date(d.end));
+
+      const avgBedtimeHour = bedtimes.reduce((sum, d) => sum + d.getHours(), 0) / bedtimes.length;
+      const avgBedtimeMin = bedtimes.reduce((sum, d) => sum + d.getMinutes(), 0) / bedtimes.length;
+      const avgWaketimeHour = waketimes.reduce((sum, d) => sum + d.getHours(), 0) / waketimes.length;
+      const avgWaketimeMin = waketimes.reduce((sum, d) => sum + d.getMinutes(), 0) / waketimes.length;
+
+      document.getElementById("avg-bedtime").textContent = 
+        `${String(Math.floor(avgBedtimeHour)).padStart(2, '0')}:${String(Math.round(avgBedtimeMin)).padStart(2, '0')}`;
+      document.getElementById("avg-waketime").textContent = 
+        `${String(Math.floor(avgWaketimeHour)).padStart(2, '0')}:${String(Math.round(avgWaketimeMin)).padStart(2, '0')}`;
+    }
+
+    function drawSleepTrendChart() {
+      const svg = d3.select("#sleep-trend-chart");
+      svg.selectAll("*").remove();
+
+      const width = parseInt(svg.style("width"));
+      const height = 350;
+      const margin = { top: 30, right: 40, bottom: 40, left: 60 };
+
+      let data = sleepData.map(d => {
+        const parts = d.total_sleep.split(':');
+        const hours = parseInt(parts[0]);
+        const minutes = parseInt(parts[1]);
+        return {
+          date: new Date(d.start),
+          duration: hours + minutes / 60,
+          start: new Date(d.start),
+          end: new Date(d.end),
+          total_sleep: d.total_sleep
+        };
+      });
+
+      if (view === "month") {
+        const grouped = d3.group(data, d => `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}`);
+        const monthlyData = Array.from(grouped).map(([month, values]) => {
+          const avgDuration = values.reduce((sum, d) => sum + d.duration, 0) / values.length;
+          return {
+            month: month,
+            duration: avgDuration,
+            date: values[0].date
+          };
+        });
+
+        const x = d3.scaleTime()
+          .domain(d3.extent(monthlyData, d => d.date))
+          .range([margin.left, width - margin.right]);
+
+        const y = d3.scaleLinear()
+          .domain([0, d3.max(monthlyData, d => d.duration)])
+          .nice()
+          .range([height - margin.bottom, margin.top]);
+
+        const line = d3.line()
+          .x(d => x(d.date))
+          .y(d => y(d.duration));
+
+        const xAxis = d3.axisBottom(x).tickFormat(d3.timeFormat("%b %Y"));
+        const yAxis = d3.axisLeft(y).tickFormat(d => `${d.toFixed(0)}h`);
+
+        svg.attr("width", width).attr("height", height);
+
+        svg.append("g")
+          .attr("transform", `translate(0,${height - margin.bottom})`)
+          .call(xAxis);
+
+        svg.append("g")
+          .attr("transform", `translate(${margin.left},0)`)
+          .call(yAxis);
+
+        svg.append("path")
+          .datum(monthlyData)
+          .attr("fill", "none")
+          .attr("stroke", "#8b5cf6")
+          .attr("stroke-width", 2)
+          .attr("d", line);
+
+        svg.selectAll(".dot")
+          .data(monthlyData)
+          .join("circle")
+          .attr("cx", d => x(d.date))
+          .attr("cy", d => y(d.duration))
+          .attr("r", 4)
+          .attr("fill", "#8b5cf6")
+          .on("mouseover", function(event, d) {
+            tooltip
+              .style("display", "block")
+              .html(`<strong>${d.month}</strong><br/>Avg: ${d.duration.toFixed(1)}h`)
+              .style("left", `${event.pageX + 15}px`)
+              .style("top", `${event.pageY - 28}px`);
+            d3.select(this).attr("r", 6).attr("fill", "#a78bfa");
+          })
+          .on("mouseout", function() {
+            tooltip.style("display", "none");
+            d3.select(this).attr("r", 4).attr("fill", "#8b5cf6");
+          });
+      } else {
+        const x = d3.scaleTime()
+          .domain(d3.extent(data, d => d.date))
+          .range([margin.left, width - margin.right]);
+
+        const y = d3.scaleLinear()
+          .domain([0, d3.max(data, d => d.duration)])
+          .nice()
+          .range([height - margin.bottom, margin.top]);
+
+        const line = d3.line()
+          .x(d => x(d.date))
+          .y(d => y(d.duration));
+
+        const xAxis = d3.axisBottom(x);
+        const yAxis = d3.axisLeft(y).tickFormat(d => `${d.toFixed(0)}h`);
+
+        svg.attr("width", width).attr("height", height);
+
+        svg.append("g")
+          .attr("transform", `translate(0,${height - margin.bottom})`)
+          .call(xAxis);
+
+        svg.append("g")
+          .attr("transform", `translate(${margin.left},0)`)
+          .call(yAxis);
+
+        svg.append("path")
+          .datum(data)
+          .attr("fill", "none")
+          .attr("stroke", "#8b5cf6")
+          .attr("stroke-width", 2)
+          .attr("d", line);
+
+        svg.selectAll(".dot")
+          .data(data)
+          .join("circle")
+          .attr("cx", d => x(d.date))
+          .attr("cy", d => y(d.duration))
+          .attr("r", 3)
+          .attr("fill", "#8b5cf6")
+          .on("mouseover", function(event, d) {
+            tooltip
+              .style("display", "block")
+              .html(`<strong>${d.date.toLocaleDateString()}</strong><br/>${d.total_sleep} hours`)
+              .style("left", `${event.pageX + 15}px`)
+              .style("top", `${event.pageY - 28}px`);
+            d3.select(this).attr("r", 5).attr("fill", "#a78bfa");
+          })
+          .on("mouseout", function() {
+            tooltip.style("display", "none");
+            d3.select(this).attr("r", 3).attr("fill", "#8b5cf6");
+          });
+      }
+    }
+
+    function drawHeatmap() {
+      const svg = d3.select("#sleep-heatmap");
+      svg.selectAll("*").remove();
+
+      const width = parseInt(svg.style("width"));
+      const height = 300;
+      const cellSize = 30;
+      const margin = { top: 30, right: 40, bottom: 30, left: 60 };
+
+      // Get last 7 days
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const lastWeek = sleepData.filter(d => new Date(d.start) >= sevenDaysAgo);
+
+      // Create date map
+      const dateMap = new Map();
+      lastWeek.forEach(d => {
+        const dateStr = new Date(d.start).toISOString().split('T')[0];
+        const parts = d.total_sleep.split(':');
+        const duration = parseInt(parts[0]) + parseInt(parts[1]) / 60;
+        dateMap.set(dateStr, duration);
+      });
+
+      // Get all dates in range
+      const dates = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        dates.unshift(d);
+      }
+
+      const maxDuration = 10;
+      const colorScale = d3.scaleLinear()
+        .domain([0, maxDuration])
+        .range(["#f0f0f0", "#8b5cf6"]);
+
+      svg.attr("width", width).attr("height", height);
+
+      dates.forEach((date, dayIndex) => {
+        const dateStr = date.toISOString().split('T')[0];
+        const duration = dateMap.get(dateStr) || 0;
+        const xPos = margin.left + dayIndex * cellSize;
+        const yPos = margin.top;
+
+        svg.append("rect")
+          .attr("x", xPos)
+          .attr("y", yPos)
+          .attr("width", cellSize - 4)
+          .attr("height", cellSize - 4)
+          .attr("fill", colorScale(duration))
+          .attr("stroke", "#ddd")
+          .on("mouseover", function(event) {
+            tooltip
+              .style("display", "block")
+              .html(`<strong>${date.toLocaleDateString()}</strong><br/>${duration.toFixed(1)}h`)
+              .style("left", `${event.pageX + 15}px`)
+              .style("top", `${event.pageY - 28}px`);
+          })
+          .on("mouseout", function() {
+            tooltip.style("display", "none");
+          });
+
+        // Add date labels
+        svg.append("text")
+          .attr("x", xPos + (cellSize - 4) / 2)
+          .attr("y", yPos + (cellSize - 4) / 2 + 5)
+          .attr("text-anchor", "middle")
+          .attr("font-size", "11px")
+          .attr("fill", duration > 4 ? "#fff" : "#222")
+          .text(date.getDate());
+      });
+    }
+
+    function drawTable() {
+      const container = document.getElementById("sleep-table");
+      
+      // Get all records (last 7 days from API)
+      const recent = sleepData.slice().reverse();
+
+      let html = `
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+              <th style="text-align: left; padding: 8px; font-weight: bold;">Date</th>
+              <th style="text-align: left; padding: 8px; font-weight: bold;">Bedtime</th>
+              <th style="text-align: left; padding: 8px; font-weight: bold;">Wake Time</th>
+              <th style="text-align: left; padding: 8px; font-weight: bold;">Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      recent.forEach(record => {
+        const startDate = new Date(record.start);
+        const endDate = new Date(record.end);
+        const dateStr = startDate.toLocaleDateString();
+        const bedtimeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const waketimeStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        html += `
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 8px;">${dateStr}</td>
+            <td style="padding: 8px;">${bedtimeStr}</td>
+            <td style="padding: 8px;">${waketimeStr}</td>
+            <td style="padding: 8px;"><strong>${record.total_sleep}</strong></td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+
+      container.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
